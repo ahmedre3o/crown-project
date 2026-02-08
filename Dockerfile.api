@@ -1,0 +1,31 @@
+# crown-api: production Dockerfile for Cloud Run
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Install backend dependencies
+COPY backend/package.json backend/package-lock.json* ./
+RUN npm ci 2>/dev/null || npm install
+
+# Copy backend source and build
+COPY backend/ .
+RUN npm run build
+
+# Production stage
+FROM node:20-alpine
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Copy package files and install production deps only
+COPY backend/package.json ./
+RUN npm install --omit=dev
+
+# Copy compiled output from builder
+COPY --from=builder /app/dist ./dist
+
+EXPOSE 8080
+
+CMD ["node", "dist/api.js"]

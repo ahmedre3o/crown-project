@@ -1,0 +1,320 @@
+--- a/backend/api.ts
++++ b/backend/api.ts
+@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
+ import cors from 'cors';
+ import dotenv from 'dotenv';
+ import path from 'path';
++import { Readable } from 'stream';
+ import { pool, testConnection, initializeDatabase } from './db';
+ import bcrypt from 'bcryptjs';
+ import jwt from 'jsonwebtoken';
+@@ -2798,108 +2799,208 @@ const handleProductsImportUpload = async (
+       return res.json(payload);
+     };
+
++    const streamToBuffer = (stream: NodeJS.ReadableStream): Promise<Buffer> =>
++      new Promise((resolve, reject) => {
++        const chunks: Buffer[] = [];
++        stream.on('data', (chunk: Buffer) => chunks.push(chunk));
++        stream.on('end', () => resolve(Buffer.concat(chunks)));
++        stream.on('error', reject);
++      });
++
++    const allowedFileFields = ['file', 'excel', 'upload'];
++    busboy.on('file', async (fieldName: string, file: NodeJS.ReadableStream, info: any) => {
++      const name = (fieldName || '').toLowerCase();
++      if (!allowedFileFields.includes(name)) {
++        file.resume();
++        return;
++      }
++      if (fileFound) {
++        file.resume();
++        return;
++      }
++      fileFound = true;
++      const filename = info.filename || '';
++      const lower = filename.toLowerCase();
++
++      const setHeaderRowAndMap = async (headerRow: string[]) => {
++        const headerLike = isHeaderLike(headerRow);
++        if (!headerLike) {
++          columnMap = {};
++          unmappedColumns = headerRow;
++          mappingInvalid = true;
++          analyzeError = 'No header row detected';
++          mappingGuide = buildProductImportMappingGuide(
++            headerRow,
++            columnMap,
++            'No header row detected'
++          );
++          return false;
++        }
++        const heuristicMap = heuristicColumnMap(headerRow);
++        const aiMap = await aiColumnMap(headerRow);
++        const autoMap = mergeColumnMaps(heuristicMap, aiMap);
++        columnMap = clientColumnMap ? clientColumnMap : autoMap;
++        unmappedColumns = headerRow.filter((header) => !columnMap[header]);
++        const validation = validateProductImportMapping(columnMap);
++        mappingValidation = validation;
++        mappingInvalid = false;
++        if (mode === 'analyze' && !validation.ok) {
++          mappingGuide = buildProductImportMappingGuide(
++            headerRow,
++            columnMap,
++            'Map fields for best results'
++          );
++        }
++        return true;
++      };
++
++      try {
++        if (lower.endsWith('.csv')) {
++          const buffer = await streamToBuffer(file);
++          const rows: Record<string, string>[] = [];
++          await new Promise<void>((resolveParse, rejectParse) => {
++            const parser = csvParser({ headers: false });
++            const src = Readable.from(buffer);
++            src.pipe(parser)
++              .on('data', (row: Record<string, string>) => rows.push(row))
++              .on('end', () => resolveParse())
++              .on('error', rejectParse);
++          });
++          const orderedValues = (row: Record<string, string>) => {
++            const keys = Object.keys(row)
++              .filter((k) => /^\d+$/.test(k))
++              .map(Number)
++              .sort((a, b) => a - b);
++            return keys.map((k) => String((row as any)[String(k)] ?? '').trim());
++          };
++          const rowHasNonEmpty = (row: Record<string, string>) =>
++            Object.values(row).some((v) => String(v ?? '').trim() !== '');
++          let headerRowIndex = -1;
++          for (let i = 0; i < rows.length; i++) {
++            if (rowHasNonEmpty(rows[i])) {
++              headerRowIndex = i;
++              break;
++            }
++          }
++          if (headerRowIndex === -1) {
++            analyzeError = 'Excel file has no data rows';
++            await finish();
++            return;
++          }
++          headers = orderedValues(rows[headerRowIndex]).map((h) => String(h || '').trim());
++          const dataRows = rows.slice(headerRowIndex + 1).filter(rowHasNonEmpty);
++          if (dataRows.length === 0) {
++            analyzeError = 'Excel file has no data rows';
++            await finish();
++            return;
++          }
++          const ok = await setHeaderRowAndMap(headers);
++          if (!ok) {
++            await finish();
++            return;
++          }
++          let rowIndex = 1;
++          for (const row of dataRows) {
++            if (processDone) break;
++            rowIndex += 1;
++            const values = orderedValues(row);
++            const rowObj: Record<string, any> = {};
++            headers.forEach((h, i) => {
++              rowObj[h] = values[i] !== undefined ? values[i] : '';
++            });
++            updateProfile(headers, rowObj);
++            collectSamples(headers, rowObj);
++            await mapAndInsert(rowObj, headers, columnMap, rowIndex);
++          }
++          await finish();
++          return;
++        }
++
++        const buffer = await streamToBuffer(file);
++        const workbook = new ExcelJS.Workbook();
++        await workbook.xlsx.load(buffer as any);
++        const sheet = workbook.worksheets[0];
++        if (!sheet) {
++          analyzeError = 'Excel file has no worksheets';
++          await finish();
++          return;
++        }
++        const excelRows: string[][] = [];
++        sheet.eachRow((row, _rowNum) => {
++          const raw = (row.values as any[]) || [];
++          const values = [];
++          for (let i = 1; i < raw.length; i++) values.push(String(raw[i] ?? '').trim());
++          excelRows.push(values);
++        });
++        const rowHasNonEmptyArr = (arr: string[]) => arr.some((c) => c !== '');
++        let headerRowIndex = -1;
++        for (let i = 0; i < excelRows.length; i++) {
++          if (rowHasNonEmptyArr(excelRows[i])) {
++            headerRowIndex = i;
++            break;
++          }
++        }
++        if (headerRowIndex === -1) {
++          analyzeError = 'Excel file has no data rows';
++          await finish();
++          return;
++        }
++        const maxCol = Math.max(...excelRows.map((r) => r.length), 0);
++        headers = excelRows[headerRowIndex].slice(0, maxCol);
++        while (headers.length < maxCol) headers.push('');
++        const dataRows = excelRows.slice(headerRowIndex + 1).filter((r) => rowHasNonEmptyArr(r));
++        if (dataRows.length === 0) {
++          analyzeError = 'Excel file has no data rows';
++          await finish();
++          return;
++        }
++        const ok = await setHeaderRowAndMap(headers);
++        if (!ok) {
++          await finish();
++          return;
++        }
++        let rowIndex = 1;
++        for (const values of dataRows) {
++          if (processDone) break;
++          rowIndex += 1;
++          const rowData: Record<string, any> = {};
++          headers.forEach((header, index) => {
++            rowData[header] = values[index] !== undefined ? values[index] : '';
++          });
++          updateProfile(headers, rowData);
++          collectSamples(headers, rowData);
++          await mapAndInsert(rowData, headers, columnMap, rowIndex);
++        }
++        await finish();
++      } catch (err: any) {
++        analyzeError = err?.message || 'Failed to parse file';
++        await finish();
++      }
++    });
++
+-    busboy.on('file', async (_name: string, file: NodeJS.ReadableStream, info: any) => {
+-      fileFound = true;
+-      const filename = info.filename || '';
+-      const lower = filename.toLowerCase();
+-
+-      if (lower.endsWith('.csv')) {
+-        const parser = csvParser();
+-        let rowIndex = 1;
+-        parser.on('headers', async (parsedHeaders) => {
+-          headers = parsedHeaders as string[];
+-          file.pause();
+-          const headerLike = isHeaderLike(headers);
+-          if (!headerLike) {
+-            columnMap = {};
+-            unmappedColumns = headers;
+-            mappingInvalid = true;
+-            analyzeError = 'No header row detected';
+-            mappingGuide = buildProductImportMappingGuide(
+-              headers,
+-              columnMap,
+-              'No header row detected'
+-            );
+-            await finish();
+-            file.resume();
+-            return;
+-          } else {
+-            const heuristicMap = heuristicColumnMap(headers);
+-            const aiMap = await aiColumnMap(headers);
+-            const autoMap = mergeColumnMaps(heuristicMap, aiMap);
+-            columnMap = clientColumnMap ? clientColumnMap : autoMap;
+-            unmappedColumns = headers.filter((header) => !columnMap[header]);
+-            const validation = validateProductImportMapping(columnMap);
+-            mappingValidation = validation;
+-            mappingInvalid = false;
+-            if (mode === 'analyze' && !validation.ok) {
+-              mappingGuide = buildProductImportMappingGuide(
+-                headers,
+-                columnMap,
+-                'Map fields for best results'
+-              );
+-            }
+-          }
+-          file.resume();
+-        });
+-
+-        parser.on('data', async (row) => {
+-          if (processDone) return;
+-          rowIndex += 1;
+-          updateProfile(headers, row);
+-          collectSamples(headers, row);
+-          file.pause();
+-          try {
+-            await mapAndInsert(row, headers, columnMap, rowIndex);
+-          } finally {
+-            file.resume();
+-          }
+-        });
+-
+-        parser.on('end', async () => {
+-          await finish();
+-        });
+-
+-        file.pipe(parser);
+-        return;
+-      }
+-
+-      const workbookReader = new ExcelJS.stream.xlsx.WorkbookReader(file as any, {
+-        entries: 'emit',
+-        sharedStrings: 'cache',
+-        worksheets: 'emit',
+-      });
+-
+-      for await (const worksheet of workbookReader) {
+-        let rowIndex = 0;
+-        for await (const row of worksheet) {
+-          if (processDone) break;
+-          rowIndex += 1;
+-          const values = row.values as any[];
+-          if (rowIndex === 1) {
+-            headers = values.slice(1).map((value) => String(value || '').trim());
+-            const headerLike = isHeaderLike(headers);
+-            if (!headerLike) {
+-              columnMap = {};
+-              unmappedColumns = headers;
+-              mappingInvalid = true;
+-              analyzeError = 'No header row detected';
+-              mappingGuide = buildProductImportMappingGuide(
+-                headers,
+-                columnMap,
+-                'No header row detected'
+-              );
+-              await finish();
+-              break;
+-            }
+-
+-            const heuristicMap = heuristicColumnMap(headers);
+-            const aiMap = await aiColumnMap(headers);
+-            const autoMap = mergeColumnMaps(heuristicMap, aiMap);
+-            columnMap = clientColumnMap ? clientColumnMap : autoMap;
+-            unmappedColumns = headers.filter((header) => !columnMap[header]);
+-            const validation = validateProductImportMapping(columnMap);
+-            mappingValidation = validation;
+-            mappingInvalid = false;
+-            if (mode === 'analyze' && !validation.ok) {
+-              mappingGuide = buildProductImportMappingGuide(
+-                headers,
+-                columnMap,
+-                'Map fields for best results'
+-              );
+-            }
+-            continue;
+-          }
+-          const rowData: Record<string, any> = {};
+-          headers.forEach((header, index) => {
+-            rowData[header] = values[index + 1];
+-          });
+-          updateProfile(headers, rowData);
+-          collectSamples(headers, rowData);
+-          await mapAndInsert(rowData, headers, columnMap, rowIndex);
+-        }
+-        break;
+-      }
+-
+-      await finish();
+-    });
+-
+     busboy.on('finish', async () => {

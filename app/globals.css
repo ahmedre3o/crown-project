@@ -1,0 +1,79 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+@import "tailwindcss";
+
+:root {
+  --neon-cyan: #00f3ff;
+  --neon-purple: #bc13fe;
+}
+
+body {
+  background-color: #000;
+  color: #e5e7eb;
+  margin: 0;
+  font-family: "Cairo", system-ui, -apple-system, sans-serif;
+}
+
+/* أنوار النيون لتاج الخدمات */
+.neon-box {
+  border: 1px solid #00f3ff;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+  background: rgba(10, 10, 12, 0.9);
+}
+
+.gold-package-border {
+  border: 1px solid #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.sidebar-link:hover {
+  background: linear-gradient(90deg, #00f3ff, transparent);
+  border-left: 4px solid #00f3ff;
+}
+
+.neon-card {
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  box-shadow: 0 0 18px rgba(0, 243, 255, 0.18);
+  background: rgba(8, 10, 16, 0.95);
+}
+
+.neon-glow-cyan {
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.45);
+}
+
+.neon-glow-fuchsia {
+  box-shadow: 0 0 20px rgba(236, 72, 153, 0.45);
+}
+
+.neon-text {
+  color: #00f3ff;
+  text-shadow: 
+    0 0 10px rgba(0, 243, 255, 0.8),
+    0 0 20px rgba(0, 243, 255, 0.6),
+    0 0 30px rgba(0, 243, 255, 0.4);
+  font-weight: 700;
+}
+
+@keyframes crown-pulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6));
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    filter: drop-shadow(0 0 14px rgba(34, 211, 238, 0.95));
+    opacity: 0.95;
+    transform: scale(1.05);
+  }
+}
+
+/* Print styles for reports */
+@media print {
+  .print\:hidden { display: none !important; }
+  .print\:block { display: block !important; }
+  .no-print, aside, nav, header { display: none !important; }
+  .print-area { display: block !important; max-width: 100%; }
+  body { background: white; color: #1f2937; }
+  .neon-card { border-color: #0d9488; box-shadow: none; }
+  .break-inside-avoid { break-inside: avoid; }
+}
+

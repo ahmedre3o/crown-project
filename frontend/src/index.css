@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+:root {
+  --neon-cyan: #00f3ff;
+  --neon-purple: #bc13fe;
+}
+
+body {
+  background-color: #0a0a0c;
+  color: white;
+  margin: 0;
+  font-family: sans-serif;
+}

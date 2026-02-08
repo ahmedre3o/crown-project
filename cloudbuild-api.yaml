@@ -1,0 +1,21 @@
+# Default _TAG to SHORT_SHA (set when source is git); override with --substitutions=_TAG=latest if needed
+substitutions:
+  _REGION: us-central1
+  _REPO: cloud-run-source-deploy
+  _IMAGE: crown-api
+  _TAG: latest
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'
+      - '-f'
+      - 'Dockerfile.api'
+      - '.'
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${_TAG}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'

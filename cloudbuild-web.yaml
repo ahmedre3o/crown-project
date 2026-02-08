@@ -1,0 +1,25 @@
+# Frontend (Next.js) deploy to Cloud Run - crown-web
+# Pass NEXT_PUBLIC_API_BASE_URL at build time (required for Next.js)
+substitutions:
+  _REGION: us-central1
+  _REPO: cloud-run-source-deploy
+  _IMAGE: crown-web
+  _TAG: latest
+  _API_BASE_URL: 'https://crown-api-756273570281.us-central1.run.app'
+
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_API_BASE_URL=${_API_BASE_URL}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${_TAG}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'
+      - '-f'
+      - 'Dockerfile.web'
+      - '.'
+images:
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:${_TAG}'
+  - '${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_IMAGE}:latest'

@@ -1,0 +1,25 @@
+/* أنوار النيون لتاج الخدمات */
+.neon-box {
+  border: 1px solid #00f3ff;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
+  background: rgba(10, 10, 12, 0.9);
+}
+
+.gold-package-border {
+  border: 1px solid #ffd700;
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+}
+
+.sidebar-link:hover {
+  background: linear-gradient(90deg, #00f3ff, transparent);
+  border-left: 4px solid #00f3ff;
+}
+
+.neon-text {
+  color: #00f3ff;
+  text-shadow: 
+    0 0 10px rgba(0, 243, 255, 0.8),
+    0 0 20px rgba(0, 243, 255, 0.6),
+    0 0 30px rgba(0, 243, 255, 0.4);
+  font-weight: 700;
+}

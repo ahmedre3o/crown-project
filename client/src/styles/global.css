@@ -1,0 +1,28 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap');
+
+:root {
+  --neon-cyan: #00f2ff;
+  --neon-pink: #ff00ff;
+  --bg-deep: #0a102a;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg-deep);
+  font-family: 'Cairo', sans-serif;
+  color: white;
+  direction: rtl; /* عشان لغة البرنامج عربية */
+}
+
+.neon-text {
+  text-shadow: 0 0 10px var(--neon-cyan), 0 0 20px var(--neon-cyan);
+}
+
+.neon-card {
+  background: rgba(10, 16, 42, 0.8);
+  border: 1px solid var(--neon-cyan);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.2);
+  border-radius: 12px;
+  padding: 20px;
+}
