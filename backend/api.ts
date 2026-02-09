@@ -55,17 +55,21 @@ app.use(
     methods: ['GET', 'POST', 'OPTIONS'],
   })
 );
-// ERP (authenticated) APIs - allow frontend origins, credentials for cookies/auth
-// Set CORS_ORIGIN or ALLOWED_ORIGINS (comma-separated) e.g. https://crown-web-xxx.run.app,http://localhost:3000
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
-  .split(',')
+// ERP (authenticated) APIs - dynamic CORS from env
+const allowedOrigins = (process.env.CORS_ORIGIN?.split(',') ?? ['http://localhost:3000'])
   .map((o) => o.trim())
   .filter(Boolean);
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/public') || req.path.startsWith('/api/storefront')) return next();
-  const origin = req.headers.origin as string | undefined;
-  const allowOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : false;
-  return cors({ origin: allowOrigin, credentials: true })(req, res, next);
+  return cors({
+    origin: (origin: string | undefined, cb: (err: Error | null, allow?: boolean | string) => void) => {
+      if (!origin) return cb(null, true); // Postman / server-to-server
+      cb(null, allowedOrigins.includes(origin) ? origin : false);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-shop-id', 'x-shop-domain'],
+  })(req, res, next);
 });
 
 app.get('/api/health', (_req: Request, res: Response) => {
