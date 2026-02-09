@@ -9,12 +9,13 @@ function warnOnce() {
   if (typeof window !== 'undefined' && !_logged) {
     _logged = true;
     console.error(
-      '[Crown] Missing NEXT_PUBLIC_API_BASE_URL. Add to .env.local (e.g. NEXT_PUBLIC_API_BASE_URL=http://localhost:5001)'
+      '[Crown] Missing NEXT_PUBLIC_API_BASE_URL. Set in Vercel env or .env.local (e.g. NEXT_PUBLIC_API_BASE_URL=https://crown-api-xxx.run.app)'
     );
   }
 }
 
-const raw = process.env.NEXT_PUBLIC_API_BASE_URL;
+// Support both NEXT_PUBLIC_API_BASE_URL (correct) and NEXT_PUBLIC_API_URL (common typo/alias)
+const raw = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
 const _base = raw && typeof raw === 'string' && raw.trim() ? raw.replace(/\/$/, '') : '';
 
 if (!_base) warnOnce();
@@ -32,7 +33,7 @@ export const API_BASE_URL = _base ? `${_base}/api` : '';
 export function apiUrl(path: string): string {
   if (!_base) {
     throw new Error(
-      'NEXT_PUBLIC_API_BASE_URL is not set. Add it to .env.local (e.g. NEXT_PUBLIC_API_BASE_URL=http://localhost:5001)'
+      'NEXT_PUBLIC_API_BASE_URL is not set. Set in Vercel env or .env.local'
     );
   }
   const p = path.startsWith('/') ? path : `/${path}`;
@@ -41,5 +42,5 @@ export function apiUrl(path: string): string {
 
 /** Dev-only: log API base (client-side) */
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
-  console.log('API BASE:', process.env.NEXT_PUBLIC_API_BASE_URL || '(not set)');
+  console.log('API BASE:', process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL || '(not set)');
 }
